@@ -53,16 +53,16 @@ os.mkdir(os.path.join('./'+train_path,'Tuberculosis'))
 os.mkdir(os.path.join('./'+test_path,'False'))
 os.mkdir(os.path.join('./'+test_path,'Tuberculosis'))
 
-print(len(os.listdir(train_path+'/False')),end=('\t'))
-print(len(os.listdir(train_path+'/Tuberculosis')))
-print(len(os.listdir(test_path+'/False')),end=('\t'))
-print(len(os.listdir(test_path+'/Tuberculosis')))
+print('Trainnig ==> False= ',len(os.listdir(train_path+'/False')),end=('\t'))
+print(',  Tuberculosis=',len(os.listdir(train_path+'/Tuberculosis')))
+print('Trainnig ==> False= ',len(os.listdir(test_path+'/False')),end=('\t'))
+print(',  Tuberculosis== ',len(os.listdir(test_path+'/Tuberculosis')))
 
 for labels in all_images :
-    img_name= labels.split('/')[1]
+    img_name= labels.split('/')[-1]
     if "TRAIN" in img_name:
         if img_name in nrml_imgs :
-            copyfile(labels,os.path.join(train_path+'/False',img_name))
+            copyfile(labels,os.path.join(train_path+'/False',img_name)) 
         elif img_name in Tubs_imgs:
             copyfile(labels,os.path.join(train_path+'/Tuberculosis',img_name))
     elif "TEST" in img_name :
@@ -109,7 +109,7 @@ for i in train:
 
 
 test_list = []
-for i in val:
+for i in test:
     if i[1] == 0:
         test_list.append("False")
     else:
@@ -164,7 +164,7 @@ x_test.reshape(-1, img_size, img_size, 1)
 y_test=np.array(y_test)
 
 datagen = ImageDataGenerator(
-    rescale=(1 / 255),
+    rescale=(1./ 255),
     featurewise_center=False,  # set input mean to 0 over the dataset
     samplewise_center=False,  # set each sample mean to 0
     featurewise_std_normalization=False,  # divide inputs by std of the dataset
@@ -177,7 +177,7 @@ datagen = ImageDataGenerator(
     horizontal_flip=True,  # randomly flip images
     vertical_flip=False,
 )  # randomly flip images
-
+val_datagen = ImageDataGenerator(rescale=1./255)  
 datagen.fit(x_train)
 #%% The Art of Transfer Learning MobileNetV2
 base_model = tf.keras.applications.MobileNetV2(
@@ -190,11 +190,11 @@ MobileNetV2 = tf.keras.Sequential(
         tf.keras.layers.GlobalAveragePooling2D(),
         tf.keras.layers.Dropout(0.2),
         tf.keras.layers.Dense(units = 4, kernel_initializer = 'uniform', activation = 'relu'),
-        tf.keras.layers.Dense(1, kernel_regularizer=tf.keras.regularizers.l2(0.01), activation="linear"),
+        tf.keras.layers.Dense(1,activation="sigmoid"),
     ]
 )
 #base_model.summary()
-base_learning_rate = 0.001
+base_learning_rate = 0.00001
 
 MobileNetV2.compile(
     optimizer=tf.keras.optimizers.Adam(lr=base_learning_rate),
@@ -203,8 +203,34 @@ MobileNetV2.compile(
 )
 
 history_MobileNetV2 = MobileNetV2.fit(
-    x_train, y_train, epochs=20, validation_data=(x_val, y_val)
+    x_train, y_train, epochs=15, validation_data=(x_val, y_val)
 )
+acc = history_MobileNetV2.history["accuracy"]
+val_acc = history_MobileNetV2.history["val_accuracy"]
+loss = history_MobileNetV2.history["loss"]
+val_loss = history_MobileNetV2.history["val_loss"]
+
+epochs_range = range(15)
+
+plt.figure(figsize=(15, 15))
+plt.subplot(2, 2, 1)
+plt.plot(epochs_range, acc, label="Training Accuracy")
+plt.plot(epochs_range, val_acc, label="Validation Accuracy")
+plt.legend(loc="lower right")
+plt.title("Training and Validation Accuracy")
+
+plt.subplot(2, 2, 2)
+plt.plot(epochs_range, loss, label="Training Loss")
+plt.plot(epochs_range, val_loss, label="Validation Loss")
+plt.legend(loc="upper right")
+plt.title("Training and Validation Loss")
+plt.show()
+
+pd.DataFrame(history_MobileNetV2.history).plot(figsize=(5,5))
+plt.title('Pre-trained Trainnig Performance')
+plt.xlabel('Epohcs')
+plt.xlabel('metrics')
+plt.show()
 #%%
 model=Sequential()
 model.add(tf.keras.applications.MobileNetV2(weights='imagenet',input_shape=(256,256,3),include_top=False))
@@ -224,8 +250,8 @@ model.summary()
 svmhisto=model.fit(x_train,y_train, epochs=20,validation_data=(x_val,y_val))
 
 #%%Save Model 
-MobileNetV2.save('MobileNetV2.h5')
-
+MobileNetV2.save('tf.keras.models.load_model')
+MobileNetV2_1=tf.keras.models.load_model('model_VGG_05.h5')
 #%% Step 6:- Evaluating the result
 
 acc = svmhisto.history["accuracy"]
@@ -263,3 +289,7 @@ print(
         y_test, predictions, target_names=["False (Class 0)", "Tubs (Class 1)"]
     )
 )
+prediction= MobileNetV2.predict(x_val, verbose=2)
+prediction= (prediction > 0.5)
+prediction
+print(classification_report(x_val.classes, prediction))
